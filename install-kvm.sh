@@ -15,7 +15,7 @@ KVM_PORT="${KVM_PORT:-8989}"
 LOG_FILE="$HOME/kvm-install.log"
 
 # Auto-update
-SCRIPT_VERSION="1.0.0"
+SCRIPT_VERSION="1.0.1"
 SCRIPT_URL="https://raw.githubusercontent.com/kevinfel-boop/Sonarr/custom-branding/install-kvm.sh"
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 
