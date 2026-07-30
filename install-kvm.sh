@@ -15,9 +15,10 @@ KVM_PORT="${KVM_PORT:-8989}"
 LOG_FILE="$HOME/kvm-install.log"
 
 # Auto-update
-SCRIPT_VERSION="1.0.1"
+SCRIPT_VERSION="1.0.0"
 SCRIPT_URL="https://raw.githubusercontent.com/kevinfel-boop/Sonarr/custom-branding/install-kvm.sh"
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+CONFIG_XML="$HOME/Library/Application Support/Sonarr/config.xml"
 
 # Couleurs pour les messages
 COLOR_RESET="\033[0m"
@@ -322,18 +323,76 @@ copy_ui_assets() {
 # 8. LANCEMENT DE L'APPLICATION
 # ============================================================
 
+set_config_port() {
+    local new_port="$1"
+    local config_dir
+    config_dir="$(dirname "$CONFIG_XML")"
+
+    mkdir -p "$config_dir"
+
+    if [ ! -f "$CONFIG_XML" ]; then
+        log_info "Aucun config.xml existant, création avec le port $new_port..."
+        cat > "$CONFIG_XML" << XMLEOF
+<Config>
+  <Port>$new_port</Port>
+</Config>
+XMLEOF
+        return 0
+    fi
+
+    if grep -q "<Port>" "$CONFIG_XML"; then
+        sed -i '' "s|<Port>.*</Port>|<Port>$new_port</Port>|" "$CONFIG_XML"
+    else
+        sed -i '' "s|<Config>|<Config>\n  <Port>$new_port</Port>|" "$CONFIG_XML"
+    fi
+
+    log_success "config.xml mis à jour : port $new_port"
+}
+
+find_free_port() {
+    local start_port="$1"
+    local port="$start_port"
+    local max_tries=20
+
+    for ((i=0; i<max_tries; i++)); do
+        if ! lsof -ti ":$port" &> /dev/null; then
+            echo "$port"
+            return 0
+        fi
+        port=$((port + 1))
+    done
+
+    return 1
+}
+
 check_port_free() {
-    if lsof -ti ":$KVM_PORT" &> /dev/null; then
-        log_warn "Le port $KVM_PORT est déjà occupé par un autre processus."
-        read -r -p "Veux-tu arrêter ce processus pour libérer le port ? [o/N] " reply
-        if [[ "$reply" =~ ^[oOyY]$ ]]; then
+    if ! lsof -ti ":$KVM_PORT" &> /dev/null; then
+        return 0
+    fi
+
+    log_warn "Le port $KVM_PORT est déjà occupé par un autre processus."
+    read -r -p "Veux-tu (a) arrêter ce processus, (b) utiliser un autre port libre automatiquement, ou (n) annuler ? [a/b/N] " reply
+
+    case "$reply" in
+        [aA])
             lsof -ti ":$KVM_PORT" | xargs kill
             sleep 2
             log_success "Port $KVM_PORT libéré."
-        else
+            ;;
+        [bB])
+            local free_port
+            if free_port=$(find_free_port "$((KVM_PORT + 1))"); then
+                log_success "Port libre trouvé : $free_port"
+                KVM_PORT="$free_port"
+                set_config_port "$KVM_PORT"
+            else
+                die "Aucun port libre trouvé après $KVM_PORT (20 tentatives). Libère un port manuellement."
+            fi
+            ;;
+        *)
             die "Le port $KVM_PORT reste occupé. Change KVM_PORT ou libère-le manuellement."
-        fi
-    fi
+            ;;
+    esac
 }
 
 launch_app() {
@@ -357,6 +416,108 @@ launch_app() {
     else
         log_info "Lancement de KVM au premier plan (Ctrl+C pour arrêter)..."
         dotnet run --project "$csproj" -p:RunAnalyzersDuringBuild=false
+    fi
+}
+
+# ============================================================
+# 8.5 INSTALLATION EN TANT QUE SERVICE (launchd)
+# ============================================================
+
+SERVICE_LABEL="com.kevinfelicite.kvm"
+SERVICE_PLIST="$HOME/Library/LaunchAgents/${SERVICE_LABEL}.plist"
+
+install_service() {
+    cd "$KVM_DIR" || die "Dossier $KVM_DIR introuvable"
+
+    local net_dir
+    net_dir=$(find "_output" -maxdepth 1 -type d -name "net*.0" 2>/dev/null | head -n 1)
+
+    if [ -z "$net_dir" ]; then
+        die "Aucun build trouvé dans $KVM_DIR/_output. Lance d'abord une installation complète (sans --service) avant de créer le service."
+    fi
+
+    local binary_path="$KVM_DIR/$net_dir/Sonarr"
+    if [ ! -f "$binary_path" ]; then
+        die "Binaire introuvable : $binary_path. Le build a-t-il réussi ?"
+    fi
+
+    log_info "Création du LaunchAgent ($SERVICE_PLIST)..."
+    mkdir -p "$HOME/Library/LaunchAgents"
+
+    cat > "$SERVICE_PLIST" << PLISTEOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>$SERVICE_LABEL</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$binary_path</string>
+        <string>/nobrowser</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>$HOME/Library/Logs/kvm-service.log</string>
+    <key>StandardErrorPath</key>
+    <string>$HOME/Library/Logs/kvm-service-error.log</string>
+</dict>
+</plist>
+PLISTEOF
+
+    log_success "Fichier plist créé : $SERVICE_PLIST"
+
+    launchctl unload "$SERVICE_PLIST" &> /dev/null || true
+
+    if launchctl load "$SERVICE_PLIST"; then
+        log_success "Service KVM installé et démarré (launchd)."
+        log_info "Logs : ~/Library/Logs/kvm-service.log"
+        log_info "Pour arrêter le service : launchctl unload $SERVICE_PLIST"
+        log_info "Pour le désinstaller : launchctl unload $SERVICE_PLIST && rm $SERVICE_PLIST"
+    else
+        die "Échec du chargement du service via launchctl."
+    fi
+
+    exit 0
+}
+
+# ============================================================
+# 8.6 SAUVEGARDE DE LA CONFIGURATION
+# ============================================================
+
+BACKUP_DIR="$HOME/kvm-backups"
+
+backup_config() {
+    local app_data="$HOME/Library/Application Support/Sonarr"
+
+    if [ ! -d "$app_data" ]; then
+        die "Dossier de config introuvable : $app_data. Rien à sauvegarder."
+    fi
+
+    mkdir -p "$BACKUP_DIR"
+
+    local timestamp
+    timestamp=$(date +%Y%m%d-%H%M%S)
+    local backup_file="$BACKUP_DIR/sonarr-config-${timestamp}.tar.gz"
+
+    log_info "Sauvegarde de $app_data..."
+    if tar -czf "$backup_file" -C "$HOME/Library/Application Support" "Sonarr"; then
+        local size
+        size=$(du -h "$backup_file" | cut -f1)
+        log_success "Sauvegarde créée : $backup_file ($size)"
+    else
+        die "Échec de la sauvegarde."
+    fi
+
+    # Ne garde que les 10 dernières sauvegardes pour éviter d'accumuler indéfiniment
+    local backup_count
+    backup_count=$(ls -1 "$BACKUP_DIR"/sonarr-config-*.tar.gz 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$backup_count" -gt 10 ]; then
+        log_info "Plus de 10 sauvegardes présentes, suppression des plus anciennes..."
+        ls -1t "$BACKUP_DIR"/sonarr-config-*.tar.gz | tail -n +11 | xargs rm -f
     fi
 }
 
@@ -388,9 +549,11 @@ print_summary() {
 RUN_IN_BACKGROUND="false"
 
 usage() {
-    echo "Usage: $0 [--background] [--update] [--help]"
+    echo "Usage: $0 [--background] [--update] [--service] [--backup] [--help]"
     echo "  --background   Lance l'application en arrière-plan (logs dans $LOG_FILE)"
     echo "  --update       Vérifie et installe une nouvelle version du script, puis quitte"
+    echo "  --service      Installe KVM comme LaunchAgent (démarrage automatique), puis quitte"
+    echo "  --backup       Sauvegarde la configuration (~/Library/Application Support/Sonarr), puis quitte"
     echo "  --help         Affiche cette aide"
 }
 
@@ -402,6 +565,13 @@ for arg in "$@"; do
             ;;
         --update)
             update_script
+            ;;
+        --service)
+            install_service
+            ;;
+        --backup)
+            backup_config
+            exit 0
             ;;
         --help)
             usage
