@@ -1,4 +1,4 @@
-const sonarrBlue = '#35c5f4';
+const sonarrBlue = '#FF7A00';
 const darkGray = '#888';
 const mediumGray = '#999';
 const gray = '#adadad';
@@ -17,12 +17,12 @@ module.exports = {
   black,
   white,
   offWhite,
-  primaryColor: '#5d9cec',
+  primaryColor: '#FF7A00',
   selectedColor: '#f9be03',
   successColor: '#00853d',
   dangerColor: '#f05050',
   warningColor: '#ffa500',
-  infoColor: '#5d9cec',
+  infoColor: '#FF7A00',
   purple,
   pink,
   sonarrBlue,
@@ -35,10 +35,10 @@ module.exports = {
   // Theme Colors
 
   themeBlue: sonarrBlue,
-  themeAlternateBlue: '#2193b5',
+  themeAlternateBlue: '#CC6200',
   themeRed: '#c4273c',
-  themeDarkColor: '#494949',
-  themeLightColor: '#595959',
+  themeDarkColor: '#141414',
+  themeLightColor: '#1a1a1a',
   pageBackground: '#202020',
   pageFooterBackground: 'rgba(0, 0, 0, .25)',
 
@@ -53,8 +53,8 @@ module.exports = {
 
   // Links
   defaultLinkHoverColor: '#fff',
-  linkColor: '#5d9cec',
-  linkHoverColor: '#1b72e2',
+  linkColor: '#FF7A00',
+  linkHoverColor: '#CC6200',
 
   // Header
   pageHeaderBackgroundColor: '#2a2a2a',
@@ -98,10 +98,10 @@ module.exports = {
   defaultHoverBackgroundColor: '#444',
   defaultHoverBorderColor: '#5a6265',
 
-  primaryBackgroundColor: '#5d9cec',
-  primaryBorderColor: '#5899eb',
-  primaryHoverBackgroundColor: '#4b91ea',
-  primaryHoverBorderColor: '#3483e7',
+  primaryBackgroundColor: '#FF7A00',
+  primaryBorderColor: '#E56E00',
+  primaryHoverBackgroundColor: '#E56E00',
+  primaryHoverBorderColor: '#CC6200',
 
   successBackgroundColor: '#27c24c',
   successBorderColor: '#26be4a',
@@ -177,7 +177,7 @@ module.exports = {
   //
   // Slider
 
-  sliderAccentColor: '#5d9cec',
+  sliderAccentColor: '#FF7A00',
 
   //
   // Form
@@ -199,10 +199,10 @@ module.exports = {
   popoverShadowColor: 'rgba(0, 0, 0, 0.2)',
   popoverArrowBorderColor: '#2a2a2a',
 
-  popoverTitleBackgroundInverseColor: '#595959',
+  popoverTitleBackgroundInverseColor: '#1a1a1a',
   popoverTitleBorderInverseColor: '#707070',
   popoverShadowInverseColor: 'rgba(0, 0, 0, 0.2)',
-  popoverArrowBorderInverseColor: 'rgba(58, 63, 81, 0.75)',
+  popoverArrowBorderInverseColor: 'rgba(0, 0, 0, 0.75)',
 
   //
   // Calendar

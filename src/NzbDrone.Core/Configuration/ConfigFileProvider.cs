@@ -295,14 +295,7 @@ namespace NzbDrone.Core.Configuration
         {
             get
             {
-                var instanceName = _appOptions.InstanceName ?? GetValue("InstanceName", BuildInfo.AppName);
-
-                if (instanceName.StartsWith(BuildInfo.AppName) || instanceName.EndsWith(BuildInfo.AppName))
-                {
-                    return instanceName;
-                }
-
-                return BuildInfo.AppName;
+                return _appOptions.InstanceName ?? GetValue("InstanceName", BuildInfo.AppName);
             }
         }
 
